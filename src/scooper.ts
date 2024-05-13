@@ -56,33 +56,19 @@ interface TokenBalance {
   ataId: PublicKey;
 }
 
-const BONK_TOKEN_MINT = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";
+const BASE_TOKEN_MINT = "So11111111111111111111111111111111111111112";
 
-const liquidStableTokens = ["mSOL", "JitoSOL", "bSOL", "mrgnLST", "jSOL", "stSOL", "scnSOL", "LST"];
-const forbiddenTokens = ["Bonk", "USDC", "USDT"].concat(liquidStableTokens);
+const forbiddenTokens = ["SOL", "USDC", "USDT"];
 
 const distributionTargets: [PublicKey, number][] = [
-  [
-    getAssociatedTokenAddressSync(
-      new PublicKey(BONK_TOKEN_MINT),
-      new PublicKey("CbX9HYvyHBa2RuotGN8Y8hCKow6xppdrhAh6RL6i2BEf") // mike7c2 fees
-    ),
-    0.22999999999999998 // 0.22999999999999998%
-  ],
-  [
-    getAssociatedTokenAddressSync(
-      new PublicKey(BONK_TOKEN_MINT),
-      new PublicKey("5sjjuNuf1f2kEL4UtyT6fxiqzk6ddi9yojXNUoLxNQ1Q") // infra maintenance fees
-    ),
-    0.22999999999999998 // 0.22999999999999998%
-  ],
-  [
-    getAssociatedTokenAddressSync(
-      new PublicKey(BONK_TOKEN_MINT),
-      new PublicKey("2Vi8WzFHAAVNjtAquByvdzzpw8p4MuXhkQyBxs4qSVxw") // bonk fees
-    ),
-    0.22999999999999998 // 0.22999999999999998%
-  ]
+  // [
+  //   getAssociatedTokenAddressSync(
+  //     new PublicKey(BASE_TOKEN_MINT),
+  //     new PublicKey("HWVaB1bBLcZdHSBDnN48DUf7ZVfJiRGQUGFt3THX6syk") // mike7c2 fees
+  //   ),
+  //   0.22999999999999998 // 0.22999999999999998%
+  // ],
+  // ...
 ];
 
 /**
@@ -102,33 +88,36 @@ function getTotalFee(): number {
  * @param asset The asset to calculate returns for
  * @returns Object containing information about return/fees
  */
-function getAssetBurnReturn(asset: Asset): {burnAmount: bigint, bonkAmount: bigint, lamportsAmount: bigint, feeAmount: bigint} {
+function getAssetBurnReturn(asset: Asset): {burnAmount: bigint, baseMintAmount: bigint, lamportsAmount: bigint, feeAmount: bigint} {
   var burnAmount: bigint;
-  var bonkAmount: bigint;
+  var baseMintAmount: bigint;
   var lamportsAmount: bigint;
 
   if (asset.quote) {
     burnAmount = asset.asset.balance - BigInt(asset.quote.inAmount);
-    bonkAmount = BigInt(asset.quote.outAmount);
-    if (asset.asset.programId == TOKEN_2022_PROGRAM_ID) {
+    baseMintAmount = BigInt(asset.quote.outAmount);
+    if (asset.asset.programId === TOKEN_2022_PROGRAM_ID) {
       lamportsAmount = BigInt(0);
     } else {
       lamportsAmount = BigInt(2400000);
     }
   } else {
     burnAmount = asset.asset.balance;
-    bonkAmount = BigInt(0);
+    baseMintAmount = BigInt(0);
     lamportsAmount = BigInt(2400000);
   }
 
   let totalFee = getTotalFee();
+  let feeAmount = BigInt(0);
 
-  let feeAmount = bonkAmount / BigInt(Math.floor(100 / totalFee));
-  bonkAmount -= feeAmount;
-
+  if(totalFee > 0) {
+    feeAmount = baseMintAmount / BigInt(Math.floor(100 / totalFee));
+    baseMintAmount -= feeAmount;  
+  }
+  
   return {
     burnAmount: burnAmount,
-    bonkAmount: bonkAmount,
+    baseMintAmount: baseMintAmount,
     lamportsAmount: lamportsAmount,
     feeAmount: feeAmount
   }
@@ -326,7 +315,7 @@ async function buildBurnTransaction(
       instructions.push(burnIx);
     }
 
-    if (asset.asset.programId == TOKEN_2022_PROGRAM_ID && !asset.swap) {
+    if (asset.asset.programId === TOKEN_2022_PROGRAM_ID && !asset.swap) {
       console.log('Adding harvest instruction');
       const harvestFeesIx = createHarvestWithheldTokensToMintInstruction(
         new PublicKey(asset.asset.token.address),
@@ -335,7 +324,7 @@ async function buildBurnTransaction(
       );
       instructions.push(harvestFeesIx);
     }
-    if (asset.asset.programId != TOKEN_2022_PROGRAM_ID || !asset.swap) {
+    if (asset.asset.programId !== TOKEN_2022_PROGRAM_ID || !asset.swap) {
       console.log('Adding closeAccountInstruction');
       const closeAccountIx = createCloseAccountInstruction(
         asset.asset.ataId,
@@ -354,7 +343,7 @@ async function buildBurnTransaction(
       ) {
         const transferInstruction = createTransferInstruction(
           getAssociatedTokenAddressSync(
-            new PublicKey(BONK_TOKEN_MINT),
+            new PublicKey(BASE_TOKEN_MINT),
             wallet.publicKey
           ),
           target,
@@ -548,5 +537,5 @@ async function loadJupyterApi(): Promise<
   return [quoteApi, tokenMap];
 }
 
-export { getTokenAccounts, getAssetBurnReturn, sweepTokens, findQuotes, loadJupyterApi, getTotalFee, BONK_TOKEN_MINT };
+export { getTokenAccounts, getAssetBurnReturn, sweepTokens, findQuotes, loadJupyterApi, getTotalFee, BASE_TOKEN_MINT };
 export type { TokenInfo, TokenBalance };
